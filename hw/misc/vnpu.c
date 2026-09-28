@@ -9,19 +9,26 @@
 #define TYPE_VNPU "vnpu"
 OBJECT_DECLARE_SIMPLE_TYPE(VnpuState, VNPU)
 
-#define VNPU_REG_ID 0x00
-#define VNPU_ID     0x564e5055
+#define VNPU_REG_ID         0x00
+#define VNPU_REG_IRQ_STATUS 0x04
+#define VNPU_REG_IRQ_RAISE  0x08
+#define VNPU_ID             0x564e5055
 
 struct VnpuState {
     PCIDevice parent_obj;
     MemoryRegion mmio;
+    uint32_t irq_status;
 };
 
 static uint64_t vnpu_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
+    VnpuState *s = opaque;
+
     switch (addr) {
     case VNPU_REG_ID:
         return VNPU_ID;
+    case VNPU_REG_IRQ_STATUS:
+        return s->irq_status;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                       "vnpu: read from unknown register 0x%" HWADDR_PRIx "\n",
@@ -33,8 +40,24 @@ static uint64_t vnpu_mmio_read(void *opaque, hwaddr addr, unsigned size)
 static void vnpu_mmio_write(void *opaque, hwaddr addr, uint64_t data,
                             unsigned size)
 {
-    qemu_log_mask(LOG_GUEST_ERROR,
-                  "vnpu: write to 0x%" HWADDR_PRIx " ignored\n", addr);
+    VnpuState *s = opaque;
+    PCIDevice *pdev = PCI_DEVICE(s);
+
+    switch (addr) {
+    case VNPU_REG_IRQ_STATUS:
+        s->irq_status &= ~data;
+        break;
+    case VNPU_REG_IRQ_RAISE:
+        s->irq_status |= data;
+        if (s->irq_status && msi_enabled(pdev)) {
+            msi_notify(pdev, 0);
+        }
+        break;
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "vnpu: write to 0x%" HWADDR_PRIx " ignored\n", addr);
+        break;
+    }
 }
 
 static const MemoryRegionOps vnpu_mmio_ops = {
