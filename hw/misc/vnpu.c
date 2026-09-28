@@ -1,22 +1,57 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "qemu/osdep.h"
+#include "qemu/log.h"
 #include "qemu/units.h"
 #include "hw/pci/pci_device.h"
 
 #define TYPE_VNPU "vnpu"
 OBJECT_DECLARE_SIMPLE_TYPE(VnpuState, VNPU)
 
+#define VNPU_REG_ID 0x00
+#define VNPU_ID     0x564e5055
+
 struct VnpuState {
     PCIDevice parent_obj;
     MemoryRegion mmio;
+};
+
+static uint64_t vnpu_mmio_read(void *opaque, hwaddr addr, unsigned size)
+{
+    switch (addr) {
+    case VNPU_REG_ID:
+        return VNPU_ID;
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "vnpu: read from unknown register 0x%" HWADDR_PRIx "\n",
+                      addr);
+        return 0;
+    }
+}
+
+static void vnpu_mmio_write(void *opaque, hwaddr addr, uint64_t data,
+                            unsigned size)
+{
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "vnpu: write to 0x%" HWADDR_PRIx " ignored\n", addr);
+}
+
+static const MemoryRegionOps vnpu_mmio_ops = {
+    .read = vnpu_mmio_read,
+    .write = vnpu_mmio_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
 };
 
 static void vnpu_realize(PCIDevice *pdev, Error **errp)
 {
     VnpuState *s = VNPU(pdev);
 
-    memory_region_init_io(&s->mmio, OBJECT(s), NULL, s, "vnpu-mmio", 4 * KiB);
+    memory_region_init_io(&s->mmio, OBJECT(s), &vnpu_mmio_ops, s,
+                          "vnpu-mmio", 4 * KiB);
     pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->mmio);
 }
 
