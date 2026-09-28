@@ -88,10 +88,18 @@ static void vnpu_exit(PCIDevice *pdev)
     msi_uninit(pdev);
 }
 
+static void vnpu_reset_enter(Object *obj, ResetType type)
+{
+    VnpuState *s = VNPU(obj);
+
+    s->irq_status = 0;
+}
+
 static void vnpu_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+    ResettableClass *rc = RESETTABLE_CLASS(klass);
 
     k->realize = vnpu_realize;
     k->exit = vnpu_exit;
@@ -99,6 +107,7 @@ static void vnpu_class_init(ObjectClass *klass, const void *data)
     k->device_id = 0x4e50;
     k->class_id = PCI_CLASS_ACCELERATOR_PROCESSING;
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+    rc->phases.enter = vnpu_reset_enter;
 }
 
 static const TypeInfo vnpu_types[] = {
