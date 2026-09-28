@@ -3,6 +3,7 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "qemu/units.h"
+#include "hw/pci/msi.h"
 #include "hw/pci/pci_device.h"
 
 #define TYPE_VNPU "vnpu"
@@ -50,9 +51,18 @@ static void vnpu_realize(PCIDevice *pdev, Error **errp)
 {
     VnpuState *s = VNPU(pdev);
 
+    if (msi_init(pdev, 0, 1, true, false, errp)) {
+        return;
+    }
+
     memory_region_init_io(&s->mmio, OBJECT(s), &vnpu_mmio_ops, s,
                           "vnpu-mmio", 4 * KiB);
     pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->mmio);
+}
+
+static void vnpu_exit(PCIDevice *pdev)
+{
+    msi_uninit(pdev);
 }
 
 static void vnpu_class_init(ObjectClass *klass, const void *data)
@@ -61,6 +71,7 @@ static void vnpu_class_init(ObjectClass *klass, const void *data)
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
 
     k->realize = vnpu_realize;
+    k->exit = vnpu_exit;
     k->vendor_id = PCI_VENDOR_ID_QEMU;
     k->device_id = 0x4e50;
     k->class_id = PCI_CLASS_ACCELERATOR_PROCESSING;
